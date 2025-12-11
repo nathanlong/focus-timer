@@ -1,0 +1,105 @@
+:root {
+  font-family: "Martian Mono", monospace;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+
+  /* gruvbox colors */
+  --color-dark0: #282828;
+  --color-dark1: #3c3836;
+  --color-dark2: #504945;
+  --color-dark3: #665c54;
+  --color-dark4: #7c6f64;
+  --color-light0: #fbf1c7;
+  --color-light1: #ebdbb2;
+  --color-light2: #d5c4a1;
+  --color-light3: #bdae93;
+  --color-light4: #a89984;
+  --color-gray: #928374;
+  --color-bright-red: #fb4934;
+  --color-bright-green: #b8bb26;
+  --color-bright-yellow: #fabd2f;
+  --color-bright-blue: #83a598;
+  --color-bright-purple: #d3869b;
+  --color-bright-aqua: #8ec07c;
+  --color-bright-orange: #fe8019;
+  --color-neutral-red: #cc241d;
+  --color-neutral-green: #98971a;
+  --color-neutral-yellow: #d79921;
+  --color-neutral-blue: #458588;
+  --color-neutral-purple: #b16286;
+  --color-neutral-aqua: #689d6a;
+  --color-neutral-orange: #d65d0e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-dark0);
+  color: var(--color-light0);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+input {
+  font-family: inherit;
+  background-color: var(--color-dark0);
+  border: 1px solid var(--color-dark2);
+  color: var(--color-light0);
+}
+
+input:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+button {
+  background-color: var(--color-dark1);
+  border: 1px solid var(--color-dark2);
+  color: var(--color-light0);
+}
+
+.grid-template {
+  display: grid;
+  grid-template-columns: 1.75fr 15rem;
+  grid-template-rows: 1fr auto;
+  min-height: 100dvh;
+  grid-template-areas:
+    "content sidebar"
+    "footer footer";
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 1rem;
+  }
+}
