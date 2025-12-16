@@ -1,12 +1,23 @@
+## ~Phase 1: MVP~ (complete)
+
+- Add/remove timers
+- Run updates in slow interval loop
+- Store timers in localStorage
+- Add/subtract time from timers
+- Calculate timer and total focus points
+- Dynamic favicon
+
+## Phase 2: Power-User
+
 - Implement keyboard shortcuts
-- Theme the app
-- Favicon to show focus of current timer and timer state (active/inactive)
-- Investigate how the add/subtract functions work. 
-  - Is it repeatable? Should they be stored in their own array with the amount to add/subtract? Is the current method prone to bugs?
 - Allow renaming of timers
-- Show combined focus total across timers.
 
+## Phase 3: Customization
 
-Long-term
+- Allow focus chunk customization
+- Add themes
 
+## Phase TBD: Long-term Ideas
+
+- Available focus chunk calculator
 - View of day with focus blocks marked on a timeline like: https://justoffbyone.com/posts/math-of-why-you-cant-focus-at-work/
