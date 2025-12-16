@@ -12,4 +12,5 @@ export interface Timer {
   focusPoints: number;
   isRunning: boolean;
   currentStartTime: Date | null;
+  currentElapsed: number;
 }

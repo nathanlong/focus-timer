@@ -13,24 +13,10 @@
     add: { id: string; minutes: number };
   }>();
 
-  let currentElapsed = 0;
   let subtractMinutes = "";
   let showSubtract = false;
   let addMinutes = "";
   let showAdd = false;
-
-  // Update current elapsed time - called by reactive statement
-  $: updateCurrentElapsed(timer);
-
-  function updateCurrentElapsed(timer: Timer) {
-    if (timer.isRunning && timer.currentStartTime) {
-      const now = new Date().getTime();
-      const sessionElapsed = now - timer.currentStartTime.getTime();
-      currentElapsed = timer.totalElapsed + sessionElapsed;
-    } else {
-      currentElapsed = timer.totalElapsed;
-    }
-  }
 
   function formatTime(ms: number): string {
     const totalMinutes = Math.floor(ms / (1000 * 60));
@@ -93,12 +79,12 @@
   <div class="timer-stats">
     <div class="stat">
       <span class="stat-label">Total Time</span>
-      <span class="stat-value">{formatTime(currentElapsed)}</span>
+      <span class="stat-value">{formatTime(timer.currentElapsed)}</span>
     </div>
     <div class="stat">
       <span class="stat-label">Focus Points</span>
       <span class="stat-value"
-        >{Math.floor(currentElapsed / (30 * 60 * 1000))}</span
+        >{timer.focusPoints}</span
       >
     </div>
   </div>
