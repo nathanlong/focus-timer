@@ -3,6 +3,12 @@
   import TimerList from "./lib/TimerList.svelte";
   import CreateTimer from "./lib/CreateTimer.svelte";
   import type { Timer } from "./lib/types";
+  import {
+    computeFocusPoints,
+    sumFocusPoints,
+    createTimer,
+    deserializeTimers,
+  } from "./lib/timerUtils";
 
   let timers: Timer[] = [];
   let activeTimerId: string | null = null;
@@ -20,20 +26,7 @@
     const savedTotalFocusPoints = localStorage.getItem("total-focus-points");
 
     if (savedTimers) {
-      const parsedTimers = JSON.parse(savedTimers);
-
-      // Convert date strings back to Date objects
-      timers = parsedTimers.map((timer: Timer) => ({
-        ...timer,
-        currentStartTime: timer.currentStartTime
-          ? new Date(timer.currentStartTime)
-          : null,
-        intervals: timer.intervals.map((interval) => ({
-          ...interval,
-          start: new Date(interval.start),
-          end: new Date(interval.end),
-        })),
-      }));
+      timers = deserializeTimers(JSON.parse(savedTimers));
     }
 
     if (savedActiveTimer) {
@@ -66,7 +59,6 @@
   $: if (initialized && timers.length >= 0) {
     countTotalFocusPoints();
     localStorage.setItem("focus-timers", JSON.stringify(timers));
-    console.log('reactive log')
   }
 
   $: if (activeTimerId !== null) {
@@ -83,18 +75,8 @@
   }
 
   function addTimer(name: string) {
-    const newTimer: Timer = {
-      id: crypto.randomUUID(),
-      name,
-      intervals: [],
-      totalElapsed: 0,
-      focusPoints: 0,
-      isRunning: false,
-      currentStartTime: null,
-      currentElapsed: 0,
-    };
-
-    timers = [...timers, newTimer];
+    if (!name || name.length > 50) return;
+    timers = [...timers, createTimer(name)];
   }
 
   function deleteTimer(id: string) {
@@ -199,8 +181,6 @@
       updateCurrentElapsed(activeTimer)
       calculateFocusPoints(activeTimer);
 
-      console.log('global interval')
-
       // Force reactivity update for active timer display
       timers = [...timers];
     }, UPDATE_INTERVAL_MS);
@@ -208,12 +188,10 @@
 
   function updateCurrentElapsed(timer: Timer) {
     if (timer.isRunning && timer.currentStartTime) {
-      console.log('running elasped', timer.id)
       const now = new Date().getTime();
       const sessionElapsed = now - timer.currentStartTime.getTime();
       timer.currentElapsed = timer.totalElapsed + sessionElapsed;
     } else {
-      console.log('stopped elasped', timer.id)
       timer.currentElapsed = timer.totalElapsed;
     }
   }
@@ -226,21 +204,15 @@
   }
 
   function calculateFocusPoints(timer: Timer) {
-    console.log('calc focus', timer.id)
     const focusChunkMs = FOCUS_CHUNK_MINUTES * 60 * 1000;
-
-    if (timer.isRunning && timer.currentStartTime) {
-      timer.focusPoints = Math.floor(timer.currentElapsed / focusChunkMs);
-    } else {
-      timer.focusPoints = Math.floor(timer.totalElapsed / focusChunkMs);
-    }
+    const elapsedMs = timer.isRunning && timer.currentStartTime
+      ? timer.currentElapsed
+      : timer.totalElapsed;
+    timer.focusPoints = computeFocusPoints(elapsedMs, focusChunkMs);
   }
 
   function countTotalFocusPoints() {
-    let count = 0;
-    timers.forEach((timer) => {
-      count += timer.focusPoints;
-    });
+    const count = sumFocusPoints(timers);
     if (count !== totalFocusPoints) {
       changeFavicon(count);
     }

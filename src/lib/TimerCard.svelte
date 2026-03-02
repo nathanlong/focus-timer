@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import type { Timer } from "./types";
+  import { formatTime } from "./timerUtils";
 
   export let timer: Timer;
   export let isActive: boolean;
@@ -18,17 +19,6 @@
   let addMinutes = "";
   let showAdd = false;
 
-  function formatTime(ms: number): string {
-    const totalMinutes = Math.floor(ms / (1000 * 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  }
-
   function handleStart() {
     dispatch("start");
   }
@@ -44,7 +34,7 @@
   }
 
   function handleSubtract() {
-    const minutes = parseInt(subtractMinutes);
+    const minutes = parseInt(subtractMinutes, 10);
     if (minutes > 0) {
       dispatch("subtract", { id: timer.id, minutes });
       subtractMinutes = "";
@@ -53,7 +43,7 @@
   }
 
   function handleAdd() {
-    const minutes = parseInt(addMinutes);
+    const minutes = parseInt(addMinutes, 10);
     if (minutes > 0) {
       dispatch("add", { id: timer.id, minutes });
       addMinutes = "";
