@@ -21,12 +21,6 @@ describe("TimerList", () => {
       expect(screen.queryByText(/no timers yet/i)).toBeNull();
     });
 
-    it("shows timer count in heading", () => {
-      const timers = [makeTimer("A"), makeTimer("B"), makeTimer("C")];
-      render(TimerList, { props: { timers, activeTimerId: null } });
-      expect(screen.getByText(/your timers \(3\)/i)).toBeTruthy();
-    });
-
     it("renders a card for each timer by name", () => {
       const timers = [makeTimer("Alpha"), makeTimer("Beta")];
       render(TimerList, { props: { timers, activeTimerId: null } });

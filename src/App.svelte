@@ -2,7 +2,9 @@
   import { onMount, onDestroy } from "svelte";
   import TimerList from "./lib/TimerList.svelte";
   import CreateTimer from "./lib/CreateTimer.svelte";
+  import DayTimeline from "./lib/DayTimeline.svelte";
   import type { Timer } from "./lib/types";
+  import { timers, activeTimerId, totalFocusPoints } from "./lib/stores";
   import {
     computeIntervalPoints,
     sumFocusPoints,
@@ -15,10 +17,7 @@
     isTypingInInput,
   } from "./lib/timerUtils";
 
-  let timers: Timer[] = [];
-  let activeTimerId: string | null = null;
   let initialized = false;
-  let totalFocusPoints = 0;
   let createTimerComponent: { focus(): void } | undefined;
 
   // Configuration constants
@@ -55,8 +54,8 @@
 
     if (num >= 1 && num <= 9) {
       const idx = num - 1;
-      if (idx < timers.length) {
-        const timer = timers[idx];
+      if (idx < $timers.length) {
+        const timer = $timers[idx];
         if (pendingAction === "add") {
           addTime(timer.id, SHORTCUT_ADJUST_MINUTES);
           clearPendingAction();
@@ -80,8 +79,8 @@
     }
 
     if (key === "k") {
-      if (activeTimerId) {
-        stopTimer(activeTimerId);
+      if ($activeTimerId) {
+        stopTimer($activeTimerId);
       }
       return;
     }
@@ -104,27 +103,27 @@
     const savedTotalFocusPoints = localStorage.getItem("total-focus-points");
 
     if (savedTimers) {
-      timers = deserializeTimers(JSON.parse(savedTimers));
+      $timers = deserializeTimers(JSON.parse(savedTimers));
     }
 
     if (savedActiveTimer) {
-      activeTimerId = savedActiveTimer;
+      $activeTimerId = savedActiveTimer;
       // Verify the active timer still exists and restart interval if it was running
-      const activeTimer = timers.find((t) => t.id === savedActiveTimer);
+      const activeTimer = $timers.find((t) => t.id === savedActiveTimer);
       if (activeTimer && activeTimer.isRunning) {
         // Timer was running when page was refreshed, continue from where it left off
         updateCurrentElapsed(activeTimer);
         calculateFocusPoints(activeTimer);
         startUpdateInterval();
-        timers = [...timers];
+        $timers = [...$timers];
       }
     }
 
     if (savedTotalFocusPoints) {
       const parsedPoints = parseInt(savedTotalFocusPoints, 10);
-      totalFocusPoints = parsedPoints;
+      $totalFocusPoints = parsedPoints;
       countTotalFocusPoints();
-      changeFavicon(totalFocusPoints);
+      changeFavicon($totalFocusPoints);
     }
 
     window.addEventListener("keydown", handleKeydown);
@@ -145,56 +144,56 @@
   });
 
   // Save timers to localStorage whenever they change (but only after initialization)
-  $: if (initialized && timers.length >= 0) {
+  $: if (initialized && $timers.length >= 0) {
     countTotalFocusPoints();
-    localStorage.setItem("focus-timers", JSON.stringify(timers));
+    localStorage.setItem("focus-timers", JSON.stringify($timers));
   }
 
-  $: if (activeTimerId !== null) {
-    localStorage.setItem("active-timer-id", activeTimerId);
+  $: if ($activeTimerId !== null) {
+    localStorage.setItem("active-timer-id", $activeTimerId);
   } else {
     localStorage.removeItem("active-timer-id");
   }
 
-  $: if (initialized && totalFocusPoints !== 0) {
+  $: if (initialized && $totalFocusPoints !== 0) {
     localStorage.setItem(
       "total-focus-points",
-      JSON.stringify(totalFocusPoints)
+      JSON.stringify($totalFocusPoints)
     );
   }
 
   function addTimer(name: string) {
     if (!name || name.length > 50) return;
-    timers = [...timers, createTimer(name)];
+    $timers = [...$timers, createTimer(name)];
   }
 
   function deleteTimer(id: string) {
-    if (activeTimerId === id) {
-      activeTimerId = null;
+    if ($activeTimerId === id) {
+      $activeTimerId = null;
       stopUpdateInterval();
     }
-    timers = timers.filter((timer) => timer.id !== id);
+    $timers = $timers.filter((timer) => timer.id !== id);
   }
 
   function startTimer(id: string) {
     // Stop any currently running timer
-    if (activeTimerId && activeTimerId !== id) {
-      stopTimer(activeTimerId);
+    if ($activeTimerId && $activeTimerId !== id) {
+      stopTimer($activeTimerId);
     }
 
-    const timer = timers.find((t) => t.id === id);
+    const timer = $timers.find((t) => t.id === id);
     if (timer && !timer.isRunning) {
       timer.isRunning = true;
       timer.currentStartTime = new Date();
-      activeTimerId = id;
-      timers = [...timers];
-      changeFavicon(totalFocusPoints);
+      $activeTimerId = id;
+      $timers = [...$timers];
+      changeFavicon($totalFocusPoints);
       startUpdateInterval();
     }
   }
 
   function stopTimer(id: string) {
-    const timer = timers.find((t) => t.id === id);
+    const timer = $timers.find((t) => t.id === id);
     if (timer && timer.isRunning && timer.currentStartTime) {
       const endTime = new Date();
       const elapsed = endTime.getTime() - timer.currentStartTime.getTime();
@@ -210,47 +209,47 @@
       timer.isRunning = false;
       timer.currentStartTime = null;
 
-      if (activeTimerId === id) {
-        activeTimerId = null;
+      if ($activeTimerId === id) {
+        $activeTimerId = null;
         stopUpdateInterval();
       }
 
       recalculateSegmentCounts(timer);
-      changeFavicon(totalFocusPoints);
+      changeFavicon($totalFocusPoints);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
 
-      timers = [...timers];
+      $timers = [...$timers];
     }
   }
 
   function subtractTime(id: string, minutes: number) {
-    const timer = timers.find((t) => t.id === id);
+    const timer = $timers.find((t) => t.id === id);
     if (timer) {
       subtractTimeFromTimer(timer, minutes * 60 * 1000);
       recalculateSegmentCounts(timer);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
-      timers = [...timers];
+      $timers = [...$timers];
     }
   }
 
   function addTime(id: string, minutes: number) {
-    const timer = timers.find((t) => t.id === id);
+    const timer = $timers.find((t) => t.id === id);
     if (timer) {
       addTimeToTimer(timer, minutes * 60 * 1000);
       recalculateSegmentCounts(timer);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
-      timers = [...timers];
+      $timers = [...$timers];
     }
   }
 
   function renameTimer(id: string, newName: string) {
-    const timer = timers.find((t) => t.id === id);
+    const timer = $timers.find((t) => t.id === id);
     if (timer) {
       timer.name = newName;
-      timers = [...timers];
+      $timers = [...$timers];
     }
   }
 
@@ -261,8 +260,8 @@
     if (globalUpdateInterval) return; // Already running
 
     globalUpdateInterval = setInterval(() => {
-      const activeTimer = timers.find(
-        (t) => t.id === activeTimerId && t.isRunning
+      const activeTimer = $timers.find(
+        (t) => t.id === $activeTimerId && t.isRunning
       );
       if (!activeTimer) {
         // No active timer, stop the interval
@@ -277,7 +276,7 @@
       calculateFocusPoints(activeTimer);
 
       // Force reactivity update for active timer display
-      timers = [...timers];
+      $timers = [...$timers];
     }, UPDATE_INTERVAL_MS);
   }
 
@@ -315,26 +314,26 @@
   }
 
   function countTotalFocusPoints() {
-    const count = sumFocusPoints(timers);
-    if (count !== totalFocusPoints) {
+    const count = sumFocusPoints($timers);
+    if (count !== $totalFocusPoints) {
       changeFavicon(count);
     }
-    totalFocusPoints = count;
+    $totalFocusPoints = count;
   }
 
   function refreshRunningTimer() {
-    const runningTimer = timers.find((t) => t.isRunning);
+    const runningTimer = $timers.find((t) => t.isRunning);
     if (!runningTimer) return;
 
     // Re-sync activeTimerId in case it drifted (tab discard / BFCache edge case)
-    if (activeTimerId !== runningTimer.id) {
-      activeTimerId = runningTimer.id;
+    if ($activeTimerId !== runningTimer.id) {
+      $activeTimerId = runningTimer.id;
     }
 
     updateCurrentElapsed(runningTimer);
     calculateFocusPoints(runningTimer);
     startUpdateInterval(); // no-op if already running
-    timers = [...timers];
+    $timers = [...$timers];
   }
 
   function handleVisibilityChange() {
@@ -348,7 +347,7 @@
   }
 
   function changeFavicon(count: number) {
-    const color = activeTimerId ? "b8bb26" : "fb4934"
+    const color = $activeTimerId ? "b8bb26" : "fb4934"
     let link = document.createElement("link");
     let oldLink = document.getElementById("dynamic-favicon");
     link.id = "dynamic-favicon";
@@ -369,15 +368,15 @@
 <main class="grid-template">
   <header class="header">
     <h1>Focus Timer</h1>
-    <p>Total Focus: {totalFocusPoints}</p>
+    <p>Total Focus: {$totalFocusPoints}</p>
   </header>
 
   <div class="container">
     <CreateTimer bind:this={createTimerComponent} on:create={(e) => addTimer(e.detail)} />
 
     <TimerList
-      {timers}
-      {activeTimerId}
+      timers={$timers}
+      activeTimerId={$activeTimerId}
       on:start={(e) => startTimer(e.detail)}
       on:stop={(e) => stopTimer(e.detail)}
       on:delete={(e) => deleteTimer(e.detail)}
@@ -385,6 +384,8 @@
       on:add={(e) => addTime(e.detail.id, e.detail.minutes)}
       on:rename={(e) => renameTimer(e.detail.id, e.detail.newName)}
     />
+
+    <DayTimeline />
   </div>
 </main>
 

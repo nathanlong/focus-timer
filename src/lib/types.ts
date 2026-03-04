@@ -26,3 +26,12 @@ export interface Timer {
   focusCount: number;
   deepWorkCount: number;
 }
+
+export interface TimelineSegment {
+  start: Date;
+  end: Date;
+  durationMs: number;
+  type: IntervalType | null;
+  isGap: boolean;
+  isActive: boolean;
+}

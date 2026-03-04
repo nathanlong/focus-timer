@@ -1,4 +1,4 @@
-import type { Timer, FocusThresholds, IntervalType } from "./types";
+import type { Timer, FocusThresholds, IntervalType, TimelineSegment } from "./types";
 
 const DEFAULT_THRESHOLDS: FocusThresholds = {
   lightMinutes: 15,
@@ -98,6 +98,79 @@ export function isTypingInInput(target: EventTarget | null): boolean {
   if (!target) return false;
   const tag = (target as HTMLElement).tagName;
   return tag === "INPUT" || tag === "TEXTAREA";
+}
+
+export function buildTimelineSegments(timers: Timer[], now: Date): TimelineSegment[] {
+  type RawInterval = {
+    start: Date;
+    end: Date;
+    type: IntervalType | null;
+    isActive: boolean;
+  };
+
+  const allIntervals: RawInterval[] = [];
+
+  for (const timer of timers) {
+    for (const interval of timer.intervals) {
+      allIntervals.push({
+        start: interval.start,
+        end: interval.end,
+        type: interval.type,
+        isActive: false,
+      });
+    }
+
+    if (timer.isRunning && timer.currentStartTime) {
+      let start = timer.currentStartTime;
+      const lastInterval = timer.intervals[timer.intervals.length - 1];
+      if (lastInterval && start < lastInterval.end) {
+        start = lastInterval.end;
+      }
+      const elapsed = now.getTime() - start.getTime();
+      allIntervals.push({
+        start,
+        end: now,
+        type: classifyInterval(elapsed),
+        isActive: true,
+      });
+    }
+  }
+
+  if (allIntervals.length === 0) return [];
+
+  allIntervals.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const segments: TimelineSegment[] = [];
+
+  for (let i = 0; i < allIntervals.length; i++) {
+    if (i > 0) {
+      const prevEnd = allIntervals[i - 1].end;
+      const gapMs = allIntervals[i].start.getTime() - prevEnd.getTime();
+      if (gapMs >= 60 * 1000) {
+        segments.push({
+          start: prevEnd,
+          end: allIntervals[i].start,
+          durationMs: gapMs,
+          type: null,
+          isGap: true,
+          isActive: false,
+        });
+      }
+    }
+
+    const interval = allIntervals[i];
+    const durationMs = interval.end.getTime() - interval.start.getTime();
+    segments.push({
+      start: interval.start,
+      end: interval.end,
+      durationMs,
+      type: interval.type,
+      isGap: false,
+      isActive: interval.isActive,
+    });
+  }
+
+  return segments;
 }
 
 export function deserializeTimers(raw: unknown): Timer[] {

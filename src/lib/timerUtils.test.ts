@@ -11,6 +11,7 @@ import {
   subtractTimeFromTimer,
   longestInterval,
   isTypingInInput,
+  buildTimelineSegments,
 } from "./timerUtils";
 import type { Timer } from "./types";
 
@@ -499,6 +500,89 @@ describe("isTypingInInput", () => {
   it("returns false for a DIV element", () => {
     const div = document.createElement("div");
     expect(isTypingInInput(div)).toBe(false);
+  });
+});
+
+describe("buildTimelineSegments", () => {
+  const MIN = 60 * 1000;
+
+  it("returns [] for an empty timers array", () => {
+    expect(buildTimelineSegments([], new Date())).toEqual([]);
+  });
+
+  it("returns [] when all timers have no intervals and none are running", () => {
+    const t1 = createTimer("A");
+    const t2 = createTimer("B");
+    expect(buildTimelineSegments([t1, t2], new Date())).toEqual([]);
+  });
+
+  it("returns a single segment for one completed interval", () => {
+    const timer = createTimer("Work");
+    const start = new Date("2024-01-01T10:00:00");
+    const end = new Date("2024-01-01T10:45:00");
+    timer.intervals = [{ start, end, elapsed: 45 * MIN, type: "deep-work" }];
+    const segments = buildTimelineSegments([timer], end);
+    expect(segments).toHaveLength(1);
+    expect(segments[0].isGap).toBe(false);
+    expect(segments[0].type).toBe("deep-work");
+    expect(segments[0].durationMs).toBe(45 * MIN);
+  });
+
+  it("inserts a gap segment between two intervals when gap >= 1 minute", () => {
+    const timer = createTimer("Work");
+    const t1start = new Date("2024-01-01T10:00:00");
+    const t1end = new Date("2024-01-01T10:45:00");
+    const t2start = new Date("2024-01-01T11:00:00"); // 15-min gap
+    const t2end = new Date("2024-01-01T11:30:00");
+    timer.intervals = [
+      { start: t1start, end: t1end, elapsed: 45 * MIN, type: "deep-work" },
+      { start: t2start, end: t2end, elapsed: 30 * MIN, type: "focus" },
+    ];
+    const segments = buildTimelineSegments([timer], t2end);
+    expect(segments).toHaveLength(3);
+    expect(segments[0].isGap).toBe(false);
+    expect(segments[1].isGap).toBe(true);
+    expect(segments[1].durationMs).toBe(15 * MIN);
+    expect(segments[2].isGap).toBe(false);
+  });
+
+  it("omits gap when gap is less than 1 minute", () => {
+    const timer = createTimer("Work");
+    const t1start = new Date("2024-01-01T10:00:00");
+    const t1end = new Date("2024-01-01T10:45:00");
+    const t2start = new Date("2024-01-01T10:45:30"); // 30-second gap
+    const t2end = new Date("2024-01-01T11:15:30");
+    timer.intervals = [
+      { start: t1start, end: t1end, elapsed: 45 * MIN, type: "deep-work" },
+      { start: t2start, end: t2end, elapsed: 30 * MIN, type: "focus" },
+    ];
+    const segments = buildTimelineSegments([timer], t2end);
+    expect(segments).toHaveLength(2);
+    expect(segments.every((s) => !s.isGap)).toBe(true);
+  });
+
+  it("marks active running timer segment with isActive: true", () => {
+    const timer = createTimer("Work");
+    timer.isRunning = true;
+    timer.currentStartTime = new Date("2024-01-01T10:00:00");
+    const now = new Date("2024-01-01T10:30:00");
+    const segments = buildTimelineSegments([timer], now);
+    expect(segments).toHaveLength(1);
+    expect(segments[0].isActive).toBe(true);
+    expect(segments[0].end.getTime()).toBe(now.getTime());
+  });
+
+  it("does not insert a gap when active timer starts exactly at previous interval end", () => {
+    const timer = createTimer("Work");
+    const intervalStart = new Date("2024-01-01T10:00:00");
+    const intervalEnd = new Date("2024-01-01T10:30:00");
+    timer.intervals = [{ start: intervalStart, end: intervalEnd, elapsed: 30 * MIN, type: "focus" }];
+    timer.isRunning = true;
+    timer.currentStartTime = intervalEnd;
+    const now = new Date("2024-01-01T11:00:00");
+    const segments = buildTimelineSegments([timer], now);
+    expect(segments).toHaveLength(2);
+    expect(segments.some((s) => s.isGap)).toBe(false);
   });
 });
 
