@@ -110,5 +110,14 @@ describe("CreateTimer", () => {
 
       expect(events).toHaveLength(0);
     });
+
+    it("Escape blurs the input", async () => {
+      render(CreateTimer);
+      const input = screen.getByRole("textbox");
+      input.focus();
+      expect(document.activeElement).toBe(input);
+      await fireEvent.keyDown(input, { key: "Escape" });
+      expect(document.activeElement).not.toBe(input);
+    });
   });
 });

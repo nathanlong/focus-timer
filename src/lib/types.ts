@@ -6,6 +6,12 @@ export interface FocusThresholds {
   deepWorkMinutes: number; // default 45
 }
 
+export const DEFAULT_THRESHOLDS: FocusThresholds = {
+  lightMinutes: 15,
+  focusMinutes: 30,
+  deepWorkMinutes: 45,
+}
+
 export interface TimeInterval {
   start: Date;
   end: Date;

@@ -1,10 +1,5 @@
 import type { Timer, FocusThresholds, IntervalType, TimelineSegment } from "./types";
-
-const DEFAULT_THRESHOLDS: FocusThresholds = {
-  lightMinutes: 15,
-  focusMinutes: 30,
-  deepWorkMinutes: 45,
-};
+import { DEFAULT_THRESHOLDS } from "./types";
 
 export function formatTime(ms: number): string {
   const totalMinutes = Math.floor(ms / (1000 * 60));
@@ -46,6 +41,7 @@ export function recalculateSegmentCounts(
   timer.deepWorkCount = 0;
   for (const interval of timer.intervals) {
     const type = classifyInterval(interval.elapsed, thresholds);
+    interval.type = type;
     if (type === "light-focus") timer.lightCount++;
     else if (type === "focus") timer.focusCount++;
     else if (type === "deep-work") timer.deepWorkCount++;

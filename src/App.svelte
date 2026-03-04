@@ -3,8 +3,11 @@
   import TimerList from "./lib/TimerList.svelte";
   import CreateTimer from "./lib/CreateTimer.svelte";
   import DayTimeline from "./lib/DayTimeline.svelte";
-  import type { Timer } from "./lib/types";
-  import { timers, activeTimerId, totalFocusPoints } from "./lib/stores";
+  import Settings from "./lib/Settings.svelte";
+  import KeyboardShortcuts from "./lib/KeyboardShortcuts.svelte";
+  import type { Timer, FocusThresholds } from "./lib/types";
+  import { DEFAULT_THRESHOLDS } from "./lib/types";
+  import { timers, activeTimerId, totalFocusPoints, settings } from "./lib/stores";
   import {
     computeIntervalPoints,
     sumFocusPoints,
@@ -19,20 +22,21 @@
 
   let initialized = false;
   let createTimerComponent: { focus(): void } | undefined;
+  let shortcutsComponent: { showModal(): void } | undefined;
 
   // Configuration constants
   const UPDATE_INTERVAL_MS = 5000; // Update every 5 seconds
   const COMBO_TIMEOUT_MS = 1500;
   const SHORTCUT_ADJUST_MINUTES = 5;
 
-  let pendingAction: "add" | "subtract" | null = null;
+  let pendingAction: "add" | "subtract" | "delete" | null = null;
   let comboTimeout: number | null = null;
 
   function isTypingInInputEvent(event: KeyboardEvent): boolean {
     return isTypingInInput(event.target);
   }
 
-  function setPendingAction(action: "add" | "subtract") {
+  function setPendingAction(action: "add" | "subtract" | "delete") {
     clearPendingAction();
     pendingAction = action;
     comboTimeout = setTimeout(clearPendingAction, COMBO_TIMEOUT_MS);
@@ -62,6 +66,9 @@
         } else if (pendingAction === "subtract") {
           subtractTime(timer.id, SHORTCUT_ADJUST_MINUTES);
           clearPendingAction();
+        } else if (pendingAction === "delete") {
+          deleteTimer(timer.id);
+          clearPendingAction();
         } else {
           if (timer.isRunning) {
             stopTimer(timer.id);
@@ -74,6 +81,7 @@
     }
 
     if (key === "n") {
+      event.preventDefault();
       createTimerComponent?.focus();
       return;
     }
@@ -94,6 +102,16 @@
       setPendingAction("subtract");
       return;
     }
+
+    if (key === "d") {
+      setPendingAction("delete");
+      return;
+    }
+
+    if (key === "?") {
+      shortcutsComponent?.showModal();
+      return;
+    }
   }
 
   // Load timers from localStorage on mount
@@ -101,6 +119,15 @@
     const savedTimers = localStorage.getItem("focus-timers");
     const savedActiveTimer = localStorage.getItem("active-timer-id");
     const savedTotalFocusPoints = localStorage.getItem("total-focus-points");
+    const savedSettings = localStorage.getItem("focus-settings");
+
+    if (savedSettings) {
+      try {
+        $settings = { ...DEFAULT_THRESHOLDS, ...JSON.parse(savedSettings) };
+      } catch {
+        // fall back to defaults
+      }
+    }
 
     if (savedTimers) {
       $timers = deserializeTimers(JSON.parse(savedTimers));
@@ -147,6 +174,20 @@
   $: if (initialized && $timers.length >= 0) {
     countTotalFocusPoints();
     localStorage.setItem("focus-timers", JSON.stringify($timers));
+  }
+
+  // Save settings and recalculate segment counts when settings change
+  $: if (initialized) {
+    onSettingsUpdate($settings);
+  }
+
+  function onSettingsUpdate(s: FocusThresholds) {
+    localStorage.setItem("focus-settings", JSON.stringify(s));
+    for (const t of $timers) {
+      recalculateSegmentCounts(t, s);
+      calculateFocusPoints(t);
+    }
+    $timers = [...$timers];
   }
 
   $: if ($activeTimerId !== null) {
@@ -202,7 +243,7 @@
         start: timer.currentStartTime,
         end: endTime,
         elapsed,
-        type: classifyInterval(elapsed),
+        type: classifyInterval(elapsed, $settings),
       });
 
       timer.totalElapsed += elapsed;
@@ -214,7 +255,7 @@
         stopUpdateInterval();
       }
 
-      recalculateSegmentCounts(timer);
+      recalculateSegmentCounts(timer, $settings);
       changeFavicon($totalFocusPoints);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
@@ -227,7 +268,7 @@
     const timer = $timers.find((t) => t.id === id);
     if (timer) {
       subtractTimeFromTimer(timer, minutes * 60 * 1000);
-      recalculateSegmentCounts(timer);
+      recalculateSegmentCounts(timer, $settings);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
       $timers = [...$timers];
@@ -238,7 +279,7 @@
     const timer = $timers.find((t) => t.id === id);
     if (timer) {
       addTimeToTimer(timer, minutes * 60 * 1000);
-      recalculateSegmentCounts(timer);
+      recalculateSegmentCounts(timer, $settings);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
       $timers = [...$timers];
@@ -300,16 +341,16 @@
   function calculateFocusPoints(timer: Timer) {
     const intervalElapsedMs = timer.intervals.reduce((sum, i) => sum + i.elapsed, 0);
     const completedPoints = timer.intervals.reduce(
-      (sum, i) => sum + computeIntervalPoints(i.elapsed), 0
+      (sum, i) => sum + computeIntervalPoints(i.elapsed, $settings), 0
     );
     const manualMs = Math.max(0, timer.totalElapsed - intervalElapsedMs);
 
     if (timer.isRunning && timer.currentStartTime) {
       const currentMs = Date.now() - timer.currentStartTime.getTime();
       timer.focusPoints =
-        completedPoints + computeIntervalPoints(manualMs) + computeIntervalPoints(currentMs);
+        completedPoints + computeIntervalPoints(manualMs, $settings) + computeIntervalPoints(currentMs, $settings);
     } else {
-      timer.focusPoints = completedPoints + computeIntervalPoints(manualMs);
+      timer.focusPoints = completedPoints + computeIntervalPoints(manualMs, $settings);
     }
   }
 
@@ -369,6 +410,9 @@
   <header class="header">
     <h1>Focus Timer</h1>
     <p>Total Focus: {$totalFocusPoints}</p>
+    <button commandfor="shortcuts-dialog" command="show-modal" class="shortcuts-btn">Shortcuts</button>
+    <KeyboardShortcuts bind:this={shortcutsComponent} />
+    <Settings />
   </header>
 
   <div class="container">
@@ -399,11 +443,31 @@
     grid-area: sidebar;
     border-left: 1px solid var(--color-dark1);
     padding: 1rem;
+    display: flex;
+    flex-direction: column;
   }
 
   h1 {
     font-size: 1.5rem;
     margin-bottom: 0.5rem;
+  }
+
+  .shortcuts-btn {
+    display: block;
+    margin-top: 0.5rem;
+    background: none;
+    border: 1px solid var(--color-dark1);
+    color: var(--color-fg1);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.75rem;
+    width: 100%;
+  }
+
+  .shortcuts-btn:hover {
+    color: var(--color-fg0);
+    border-color: var(--color-fg1);
   }
 
   .container {

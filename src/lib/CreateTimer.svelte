@@ -22,6 +22,8 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === "Enter") {
       handleSubmit();
+    } else if (event.key === "Escape") {
+      inputEl.blur();
     }
   }
 </script>

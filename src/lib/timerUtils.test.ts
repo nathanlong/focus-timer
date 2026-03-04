@@ -372,6 +372,7 @@ describe("recalculateSegmentCounts", () => {
     expect(timer.deepWorkCount).toBe(0);
     expect(timer.lightCount).toBe(0);
     expect(timer.focusCount).toBe(0);
+    expect(timer.intervals[0].type).toBe(null);
   });
 
   it("resets previous counts before recomputing", () => {
@@ -380,6 +381,33 @@ describe("recalculateSegmentCounts", () => {
     expect(timer.lightCount).toBe(0);
     expect(timer.focusCount).toBe(0);
     expect(timer.deepWorkCount).toBe(0);
+  });
+
+  it("updates interval.type fields based on elapsed and thresholds", () => {
+    const timer = createTimer("test");
+    const d = new Date();
+    timer.intervals = [
+      { start: d, end: d, elapsed: 15 * 60 * 1000, type: null },
+      { start: d, end: d, elapsed: 30 * 60 * 1000, type: null },
+      { start: d, end: d, elapsed: 45 * 60 * 1000, type: null },
+    ];
+    recalculateSegmentCounts(timer);
+    expect(timer.intervals[0].type).toBe("light-focus");
+    expect(timer.intervals[1].type).toBe("focus");
+    expect(timer.intervals[2].type).toBe("deep-work");
+  });
+
+  it("re-classifies interval.type when thresholds change", () => {
+    const timer = createTimer("test");
+    const d = new Date();
+    timer.intervals = [
+      { start: d, end: d, elapsed: 20 * 60 * 1000, type: "light-focus" as const },
+    ];
+    // With tighter thresholds: 20 min is now "focus"
+    recalculateSegmentCounts(timer, { lightMinutes: 10, focusMinutes: 20, deepWorkMinutes: 30 });
+    expect(timer.intervals[0].type).toBe("focus");
+    expect(timer.focusCount).toBe(1);
+    expect(timer.lightCount).toBe(0);
   });
 
   it("uses custom thresholds when provided", () => {
