@@ -97,6 +97,24 @@ describe("TimerList", () => {
       expect(events).toEqual([{ id: timer.id, minutes: 15 }]);
     });
 
+    it("forwards 'rename' event with id and newName", async () => {
+      const timer = makeTimer("Work");
+      const events: { id: string; newName: string }[] = [];
+      render(TimerList, {
+        props: { timers: [timer], activeTimerId: null },
+        events: {
+          rename: (e: CustomEvent<{ id: string; newName: string }>) =>
+            events.push(e.detail),
+        },
+      });
+
+      await fireEvent.dblClick(screen.getByText("Work"));
+      const input = screen.getByDisplayValue("Work");
+      await fireEvent.input(input, { target: { value: "New Work" } });
+      await fireEvent.keyDown(input, { key: "Enter" });
+      expect(events).toEqual([{ id: timer.id, newName: "New Work" }]);
+    });
+
     it("forwards 'add' event with id and minutes", async () => {
       const timer = makeTimer("Work");
       const events: { id: string; minutes: number }[] = [];

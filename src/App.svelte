@@ -4,20 +4,98 @@
   import CreateTimer from "./lib/CreateTimer.svelte";
   import type { Timer } from "./lib/types";
   import {
-    computeFocusPoints,
+    computeIntervalPoints,
     sumFocusPoints,
     createTimer,
     deserializeTimers,
+    classifyInterval,
+    recalculateSegmentCounts,
+    addTimeToTimer,
+    subtractTimeFromTimer,
+    isTypingInInput,
   } from "./lib/timerUtils";
 
   let timers: Timer[] = [];
   let activeTimerId: string | null = null;
   let initialized = false;
   let totalFocusPoints = 0;
+  let createTimerComponent: { focus(): void } | undefined;
 
   // Configuration constants
-  const FOCUS_CHUNK_MINUTES = 30; // Focus points are awarded for every 30 minutes
   const UPDATE_INTERVAL_MS = 5000; // Update every 5 seconds
+  const COMBO_TIMEOUT_MS = 1500;
+  const SHORTCUT_ADJUST_MINUTES = 5;
+
+  let pendingAction: "add" | "subtract" | null = null;
+  let comboTimeout: number | null = null;
+
+  function isTypingInInputEvent(event: KeyboardEvent): boolean {
+    return isTypingInInput(event.target);
+  }
+
+  function setPendingAction(action: "add" | "subtract") {
+    clearPendingAction();
+    pendingAction = action;
+    comboTimeout = setTimeout(clearPendingAction, COMBO_TIMEOUT_MS);
+  }
+
+  function clearPendingAction() {
+    pendingAction = null;
+    if (comboTimeout !== null) {
+      clearTimeout(comboTimeout);
+      comboTimeout = null;
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (isTypingInInputEvent(event)) return;
+
+    const key = event.key;
+    const num = parseInt(key, 10);
+
+    if (num >= 1 && num <= 9) {
+      const idx = num - 1;
+      if (idx < timers.length) {
+        const timer = timers[idx];
+        if (pendingAction === "add") {
+          addTime(timer.id, SHORTCUT_ADJUST_MINUTES);
+          clearPendingAction();
+        } else if (pendingAction === "subtract") {
+          subtractTime(timer.id, SHORTCUT_ADJUST_MINUTES);
+          clearPendingAction();
+        } else {
+          if (timer.isRunning) {
+            stopTimer(timer.id);
+          } else {
+            startTimer(timer.id);
+          }
+        }
+      }
+      return;
+    }
+
+    if (key === "n") {
+      createTimerComponent?.focus();
+      return;
+    }
+
+    if (key === "k") {
+      if (activeTimerId) {
+        stopTimer(activeTimerId);
+      }
+      return;
+    }
+
+    if (key === "a") {
+      setPendingAction("add");
+      return;
+    }
+
+    if (key === "s") {
+      setPendingAction("subtract");
+      return;
+    }
+  }
 
   // Load timers from localStorage on mount
   onMount(() => {
@@ -35,16 +113,23 @@
       const activeTimer = timers.find((t) => t.id === savedActiveTimer);
       if (activeTimer && activeTimer.isRunning) {
         // Timer was running when page was refreshed, continue from where it left off
+        updateCurrentElapsed(activeTimer);
+        calculateFocusPoints(activeTimer);
         startUpdateInterval();
+        timers = [...timers];
       }
     }
 
     if (savedTotalFocusPoints) {
-      const parsedPoints = parseInt(savedTotalFocusPoints);
+      const parsedPoints = parseInt(savedTotalFocusPoints, 10);
       totalFocusPoints = parsedPoints;
       countTotalFocusPoints();
-      changeFavicon(totalFocusPoints)
+      changeFavicon(totalFocusPoints);
     }
+
+    window.addEventListener("keydown", handleKeydown);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
 
     // Mark as initialized after loading is complete
     initialized = true;
@@ -53,6 +138,10 @@
   // Cleanup interval on component destroy
   onDestroy(() => {
     stopUpdateInterval();
+    window.removeEventListener("keydown", handleKeydown);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.removeEventListener("focus", handleWindowFocus);
+    clearPendingAction();
   });
 
   // Save timers to localStorage whenever they change (but only after initialization)
@@ -114,6 +203,7 @@
         start: timer.currentStartTime,
         end: endTime,
         elapsed,
+        type: classifyInterval(elapsed),
       });
 
       timer.totalElapsed += elapsed;
@@ -125,6 +215,7 @@
         stopUpdateInterval();
       }
 
+      recalculateSegmentCounts(timer);
       changeFavicon(totalFocusPoints);
       updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
@@ -136,12 +227,10 @@
   function subtractTime(id: string, minutes: number) {
     const timer = timers.find((t) => t.id === id);
     if (timer) {
-      const msToSubtract = minutes * 60 * 1000;
-      timer.totalElapsed = Math.max(0, timer.totalElapsed - msToSubtract);
-
-      updateCurrentElapsed(timer)
+      subtractTimeFromTimer(timer, minutes * 60 * 1000);
+      recalculateSegmentCounts(timer);
+      updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
-
       timers = [...timers];
     }
   }
@@ -149,12 +238,18 @@
   function addTime(id: string, minutes: number) {
     const timer = timers.find((t) => t.id === id);
     if (timer) {
-      const msToAdd = minutes * 60 * 1000;
-      timer.totalElapsed += msToAdd;
-
-      updateCurrentElapsed(timer)
+      addTimeToTimer(timer, minutes * 60 * 1000);
+      recalculateSegmentCounts(timer);
+      updateCurrentElapsed(timer);
       calculateFocusPoints(timer);
+      timers = [...timers];
+    }
+  }
 
+  function renameTimer(id: string, newName: string) {
+    const timer = timers.find((t) => t.id === id);
+    if (timer) {
+      timer.name = newName;
       timers = [...timers];
     }
   }
@@ -204,11 +299,19 @@
   }
 
   function calculateFocusPoints(timer: Timer) {
-    const focusChunkMs = FOCUS_CHUNK_MINUTES * 60 * 1000;
-    const elapsedMs = timer.isRunning && timer.currentStartTime
-      ? timer.currentElapsed
-      : timer.totalElapsed;
-    timer.focusPoints = computeFocusPoints(elapsedMs, focusChunkMs);
+    const intervalElapsedMs = timer.intervals.reduce((sum, i) => sum + i.elapsed, 0);
+    const completedPoints = timer.intervals.reduce(
+      (sum, i) => sum + computeIntervalPoints(i.elapsed), 0
+    );
+    const manualMs = Math.max(0, timer.totalElapsed - intervalElapsedMs);
+
+    if (timer.isRunning && timer.currentStartTime) {
+      const currentMs = Date.now() - timer.currentStartTime.getTime();
+      timer.focusPoints =
+        completedPoints + computeIntervalPoints(manualMs) + computeIntervalPoints(currentMs);
+    } else {
+      timer.focusPoints = completedPoints + computeIntervalPoints(manualMs);
+    }
   }
 
   function countTotalFocusPoints() {
@@ -217,6 +320,31 @@
       changeFavicon(count);
     }
     totalFocusPoints = count;
+  }
+
+  function refreshRunningTimer() {
+    const runningTimer = timers.find((t) => t.isRunning);
+    if (!runningTimer) return;
+
+    // Re-sync activeTimerId in case it drifted (tab discard / BFCache edge case)
+    if (activeTimerId !== runningTimer.id) {
+      activeTimerId = runningTimer.id;
+    }
+
+    updateCurrentElapsed(runningTimer);
+    calculateFocusPoints(runningTimer);
+    startUpdateInterval(); // no-op if already running
+    timers = [...timers];
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === "visible") {
+      refreshRunningTimer();
+    }
+  }
+
+  function handleWindowFocus() {
+    refreshRunningTimer();
   }
 
   function changeFavicon(count: number) {
@@ -245,7 +373,7 @@
   </header>
 
   <div class="container">
-    <CreateTimer on:create={(e) => addTimer(e.detail)} />
+    <CreateTimer bind:this={createTimerComponent} on:create={(e) => addTimer(e.detail)} />
 
     <TimerList
       {timers}
@@ -255,6 +383,7 @@
       on:delete={(e) => deleteTimer(e.detail)}
       on:subtract={(e) => subtractTime(e.detail.id, e.detail.minutes)}
       on:add={(e) => addTime(e.detail.id, e.detail.minutes)}
+      on:rename={(e) => renameTimer(e.detail.id, e.detail.newName)}
     />
   </div>
 </main>

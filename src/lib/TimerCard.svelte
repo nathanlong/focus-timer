@@ -1,10 +1,11 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import type { Timer } from "./types";
-  import { formatTime } from "./timerUtils";
+  import { formatTime, longestInterval } from "./timerUtils";
 
   export let timer: Timer;
   export let isActive: boolean;
+  export let index: number;
 
   const dispatch = createEventDispatcher<{
     start: void;
@@ -12,12 +13,57 @@
     delete: void;
     subtract: { id: string; minutes: number };
     add: { id: string; minutes: number };
+    rename: { id: string; newName: string };
   }>();
 
   let subtractMinutes = "";
   let showSubtract = false;
   let addMinutes = "";
   let showAdd = false;
+  let isRenaming = false;
+  let renameValue = "";
+  let renameCommitted = false;
+
+  function autoFocus(node: HTMLElement) {
+    node.focus();
+  }
+
+  function handleNameDblClick() {
+    isRenaming = true;
+    renameValue = timer.name;
+    renameCommitted = false;
+  }
+
+  function commitRename() {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      dispatch("rename", { id: timer.id, newName: trimmed });
+    }
+    isRenaming = false;
+  }
+
+  function handleRenameKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      renameCommitted = true;
+      commitRename();
+    } else if (event.key === "Escape") {
+      renameCommitted = true;
+      isRenaming = false;
+    }
+  }
+
+  function handleRenameBlur() {
+    if (!renameCommitted) {
+      commitRename();
+    }
+    renameCommitted = false;
+  }
+
+  $: lastIntervalElapsed = timer.isRunning && timer.currentStartTime
+    ? timer.currentElapsed - timer.totalElapsed
+    : timer.intervals.length > 0
+      ? timer.intervals[timer.intervals.length - 1].elapsed
+      : 0;
 
   function handleStart() {
     dispatch("start");
@@ -53,8 +99,21 @@
 </script>
 
 <div class="timer-card" class:active={isActive}>
+  <div class="timer-index">{index + 1}</div>
   <div class="timer-header">
-    <h4 class="timer-name" title={timer.name}>{timer.name}</h4>
+    {#if isRenaming}
+      <input
+        type="text"
+        class="rename-input"
+        bind:value={renameValue}
+        use:autoFocus
+        on:blur={handleRenameBlur}
+        on:keydown={handleRenameKeydown}
+        maxlength="50"
+      />
+    {:else}
+      <h4 class="timer-name" title={timer.name} on:dblclick={handleNameDblClick}>{timer.name}</h4>
+    {/if}
     <div class="timer-status">
       {#if timer.isRunning}
         <span class="status-indicator running">●</span>
@@ -65,17 +124,42 @@
       {/if}
     </div>
   </div>
+  
 
   <div class="timer-stats">
     <div class="stat">
-      <span class="stat-label">Total Time</span>
+      <span class="stat-label">Points</span>
+      <span class="stat-value">{timer.focusPoints}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Total</span>
       <span class="stat-value">{formatTime(timer.currentElapsed)}</span>
     </div>
     <div class="stat">
-      <span class="stat-label">Focus Points</span>
-      <span class="stat-value"
-        >{timer.focusPoints}</span
-      >
+      <span class="stat-label">Session</span>
+      <span class="stat-value">{formatTime(lastIntervalElapsed)}</span>
+    </div>
+  </div>
+
+  <div class="timer-stats">
+    <div class="stat">
+      <span class="stat-label">Light</span>
+      <span class="stat-value light-focus">{timer.lightCount}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Focus</span>
+      <span class="stat-value focus">{timer.focusCount}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Deep</span>
+      <span class="stat-value deep-work">{timer.deepWorkCount}</span>
+    </div>
+  </div>
+
+  <div class="timer-stats timer-stats-single">
+    <div class="stat">
+      <span class="stat-label">Longest</span>
+      <span class="stat-value">{formatTime(longestInterval(timer))}</span>
     </div>
   </div>
 
@@ -184,6 +268,7 @@
     padding: 1.5rem;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
+    position: relative;
   }
 
   .timer-card.active {
@@ -191,11 +276,31 @@
     box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
   }
 
+  .timer-index {
+    position: absolute;
+    top: -1rem;
+    left: -1rem;
+    width: 2rem;
+    aspect-ratio: 1/1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--color-dark0);
+    border: 1px solid var(--color-dark2);
+    border-radius: 100%;
+    transition: border-color 0.2s ease;
+  }
+
+  .active .timer-index {
+    border-color: var(--color-bright-green);
+  }
+
   .timer-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    gap: 0.5rem;
   }
 
   .timer-name {
@@ -231,11 +336,43 @@
     color: var(--color-gray);
   }
 
+  .rename-input {
+    flex: 1;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    background: var(--color-dark2);
+    border: 1px solid var(--color-bright-blue);
+    color: var(--color-light0);
+    width: 100%;
+  }
+
+  .rename-input:focus {
+    outline: none;
+  }
+
+  .timer-stats-single {
+    grid-template-columns: 1fr;
+  }
+
   .timer-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
     margin-bottom: 1.5rem;
+  }
+
+  .stat-value.light-focus {
+    color: var(--color-bright-yellow);
+  }
+
+  .stat-value.focus {
+    color: var(--color-bright-blue);
+  }
+
+  .stat-value.deep-work {
+    color: var(--color-bright-green);
   }
 
   .stat {

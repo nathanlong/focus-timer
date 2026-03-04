@@ -6,6 +6,11 @@
   }>();
 
   let timerName = "";
+  let inputEl: HTMLInputElement;
+
+  export function focus() {
+    inputEl?.focus();
+  }
 
   function handleSubmit() {
     if (timerName.trim()) {
@@ -25,6 +30,7 @@
   <div class="input-group">
     <input
       type="text"
+      bind:this={inputEl}
       bind:value={timerName}
       on:keydown={handleKeydown}
       placeholder="Enter timer name..."

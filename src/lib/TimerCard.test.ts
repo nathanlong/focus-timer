@@ -42,13 +42,58 @@ describe("TimerCard", () => {
           isActive: false,
         },
       });
-      expect(screen.getByText("1h 30m")).toBeTruthy();
+      expect(screen.getByText("01:30")).toBeTruthy();
     });
 
-    it("displays focus points", () => {
+    it("shows '00:00' for Session when there are no intervals and timer is stopped", () => {
       render(TimerCard, {
-        props: { timer: makeTimer({ focusPoints: 3 }), isActive: false },
+        props: { timer: makeTimer({ isRunning: false, intervals: [] }), isActive: false },
       });
+      expect(screen.getByText("Session")).toBeTruthy();
+      // 00:00 appears for both Total and Session
+      expect(screen.getAllByText("00:00").length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("shows the last interval's elapsed when stopped with intervals", () => {
+      const d = new Date();
+      const timer = makeTimer({
+        isRunning: false,
+        intervals: [
+          { start: d, end: d, elapsed: 45 * 60 * 1000, type: "deep-work" },
+          { start: d, end: d, elapsed: 30 * 60 * 1000, type: "focus" },
+        ],
+        totalElapsed: 75 * 60 * 1000,
+        currentElapsed: 75 * 60 * 1000,
+      });
+      render(TimerCard, { props: { timer, isActive: false } });
+      // last interval = 30m; total = 1h 15m
+      expect(screen.getByText("00:30")).toBeTruthy();
+      expect(screen.getByText("01:15")).toBeTruthy();
+    });
+
+    it("shows the live session elapsed when running (currentElapsed - totalElapsed)", () => {
+      const timer = makeTimer({
+        isRunning: true,
+        currentStartTime: new Date(),
+        totalElapsed: 30 * 60 * 1000,
+        currentElapsed: 45 * 60 * 1000, // 15m into current session
+      });
+      render(TimerCard, { props: { timer, isActive: true } });
+      expect(screen.getByText("00:15")).toBeTruthy();
+    });
+
+    it("displays segment counts", () => {
+      render(TimerCard, {
+        props: {
+          timer: makeTimer({ lightCount: 1, focusCount: 2, deepWorkCount: 3 }),
+          isActive: false,
+        },
+      });
+      expect(screen.getByText("Light")).toBeTruthy();
+      expect(screen.getByText("Focus")).toBeTruthy();
+      expect(screen.getByText("Deep")).toBeTruthy();
+      expect(screen.getByText("1")).toBeTruthy();
+      expect(screen.getByText("2")).toBeTruthy();
       expect(screen.getByText("3")).toBeTruthy();
     });
 
@@ -213,6 +258,82 @@ describe("TimerCard", () => {
       await fireEvent.click(screen.getByRole("button", { name: /^add$/i }));
 
       expect(events).toHaveLength(0);
+    });
+
+    describe("rename", () => {
+      it("double-clicking the timer name shows a pre-filled input", async () => {
+        render(TimerCard, {
+          props: { timer: makeTimer({ name: "My Timer" }), isActive: false },
+        });
+        await fireEvent.dblClick(screen.getByText("My Timer"));
+        expect(screen.getByDisplayValue("My Timer")).toBeTruthy();
+      });
+
+      it("pressing Enter dispatches 'rename' with the trimmed new name", async () => {
+        const timer = makeTimer({ name: "Old Name" });
+        const events: { id: string; newName: string }[] = [];
+        render(TimerCard, {
+          props: { timer, isActive: false },
+          events: {
+            rename: (e: CustomEvent<{ id: string; newName: string }>) =>
+              events.push(e.detail),
+          },
+        });
+
+        await fireEvent.dblClick(screen.getByText("Old Name"));
+        const input = screen.getByDisplayValue("Old Name");
+        await fireEvent.input(input, { target: { value: "  New Name  " } });
+        await fireEvent.keyDown(input, { key: "Enter" });
+        expect(events).toEqual([{ id: timer.id, newName: "New Name" }]);
+      });
+
+      it("pressing Escape cancels renaming without dispatching", async () => {
+        const events: unknown[] = [];
+        render(TimerCard, {
+          props: { timer: makeTimer({ name: "My Timer" }), isActive: false },
+          events: { rename: (e: CustomEvent<unknown>) => events.push(e.detail) },
+        });
+
+        await fireEvent.dblClick(screen.getByText("My Timer"));
+        const input = screen.getByDisplayValue("My Timer");
+        await fireEvent.keyDown(input, { key: "Escape" });
+
+        expect(events).toHaveLength(0);
+        expect(screen.queryByDisplayValue("My Timer")).toBeNull();
+        expect(screen.getByText("My Timer")).toBeTruthy();
+      });
+
+      it("blur dispatches 'rename' with the current value", async () => {
+        const timer = makeTimer({ name: "Old Name" });
+        const events: { id: string; newName: string }[] = [];
+        render(TimerCard, {
+          props: { timer, isActive: false },
+          events: {
+            rename: (e: CustomEvent<{ id: string; newName: string }>) =>
+              events.push(e.detail),
+          },
+        });
+
+        await fireEvent.dblClick(screen.getByText("Old Name"));
+        const input = screen.getByDisplayValue("Old Name");
+        await fireEvent.input(input, { target: { value: "New Name" } });
+        await fireEvent.blur(input);
+        expect(events).toEqual([{ id: timer.id, newName: "New Name" }]);
+      });
+
+      it("does not dispatch 'rename' when the name is whitespace-only", async () => {
+        const events: unknown[] = [];
+        render(TimerCard, {
+          props: { timer: makeTimer({ name: "My Timer" }), isActive: false },
+          events: { rename: (e: CustomEvent<unknown>) => events.push(e.detail) },
+        });
+
+        await fireEvent.dblClick(screen.getByText("My Timer"));
+        const input = screen.getByDisplayValue("My Timer");
+        await fireEvent.input(input, { target: { value: "   " } });
+        await fireEvent.keyDown(input, { key: "Enter" });
+        expect(events).toHaveLength(0);
+      });
     });
 
     describe("delete", () => {

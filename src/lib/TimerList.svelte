@@ -12,6 +12,7 @@
     delete: string;
     subtract: { id: string; minutes: number };
     add: { id: string; minutes: number };
+    rename: { id: string; newName: string };
   }>();
 
   function handleStart(id: string) {
@@ -33,6 +34,10 @@
   function handleAdd(event: CustomEvent<{ id: string; minutes: number }>) {
     dispatch("add", event.detail);
   }
+
+  function handleRename(event: CustomEvent<{ id: string; newName: string }>) {
+    dispatch("rename", event.detail);
+  }
 </script>
 
 <div class="timer-list">
@@ -41,17 +46,18 @@
       <p>No timers yet. Create your first timer above!</p>
     </div>
   {:else}
-    <h3>Your Timers ({timers.length})</h3>
     <div class="timers-grid">
-      {#each timers as timer (timer.id)}
+      {#each timers as timer, index (timer.id)}
         <TimerCard
           {timer}
           isActive={activeTimerId === timer.id}
+          index={index}
           on:start={() => handleStart(timer.id)}
           on:stop={() => handleStop(timer.id)}
           on:delete={() => handleDelete(timer.id)}
           on:subtract={handleSubtract}
           on:add={handleAdd}
+          on:rename={handleRename}
         />
       {/each}
     </div>
@@ -76,13 +82,13 @@
 
   .timers-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1rem;
   }
 
-  @media (max-width: 640px) {
+  @media (min-width: 640px) {
     .timers-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     }
   }
 </style>

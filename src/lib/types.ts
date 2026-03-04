@@ -1,7 +1,16 @@
+export type IntervalType = 'light-focus' | 'focus' | 'deep-work'
+
+export interface FocusThresholds {
+  lightMinutes: number;    // default 15
+  focusMinutes: number;    // default 30
+  deepWorkMinutes: number; // default 45
+}
+
 export interface TimeInterval {
   start: Date;
   end: Date;
   elapsed: number; // milliseconds
+  type: IntervalType | null;
 }
 
 export interface Timer {
@@ -13,4 +22,7 @@ export interface Timer {
   isRunning: boolean;
   currentStartTime: Date | null;
   currentElapsed: number;
+  lightCount: number;
+  focusCount: number;
+  deepWorkCount: number;
 }
