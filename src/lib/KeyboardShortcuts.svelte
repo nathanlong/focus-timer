@@ -53,11 +53,12 @@
 
 <style>
   dialog {
-    background: var(--color-bg1);
-    color: var(--color-fg0);
+    background: var(--color-dark0);
+    color: var(--color-light1);
     border: 1px solid var(--color-dark1);
     padding: 0;
     min-width: 22rem;
+    border-radius: 0.5rem;
   }
 
   dialog::backdrop {

@@ -126,14 +126,14 @@
   </div>
   
 
-  <div class="timer-stats">
-    <div class="stat">
-      <span class="stat-label">Points</span>
-      <span class="stat-value">{timer.focusPoints}</span>
-    </div>
+  <div class="timer-times">
     <div class="stat">
       <span class="stat-label">Total</span>
       <span class="stat-value">{formatTime(timer.currentElapsed)}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Longest</span>
+      <span class="stat-value">{formatTime(longestInterval(timer))}</span>
     </div>
     <div class="stat">
       <span class="stat-label">Session</span>
@@ -154,13 +154,13 @@
       <span class="stat-label">Deep</span>
       <span class="stat-value deep-work">{timer.deepWorkCount}</span>
     </div>
+    <div class="stat">
+      <span class="stat-label">Points</span>
+      <span class="stat-value">{timer.focusPoints}</span>
+    </div>
   </div>
 
   <div class="timer-stats timer-stats-single">
-    <div class="stat">
-      <span class="stat-label">Longest</span>
-      <span class="stat-value">{formatTime(longestInterval(timer))}</span>
-    </div>
   </div>
 
   <div class="timer-controls">
@@ -356,9 +356,16 @@
     grid-template-columns: 1fr;
   }
 
-  .timer-stats {
+  .timer-times {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .timer-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.5rem;
     margin-bottom: 1.5rem;
   }
